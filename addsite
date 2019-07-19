@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+echo "Adding new site: $1"
+
+echo "Creating images directory"
+docker-compose exec --user application "web" mkdir -p //var/www/images/docker/$1
+
+echo "Creating tmp directory"
+docker-compose exec --user application "web" mkdir -p //var/www/images/docker/$1/tmp
+
+echo "Running install.php script"
+docker-compose exec --env MW_INSTALL_PATH="/var/www/$1" --user root "web" bash //var/www/$1/.docker/installdbs $1
+
+./hosts-add $1.web.mw.localhost
+
+echo "Finished adding new site: $1"

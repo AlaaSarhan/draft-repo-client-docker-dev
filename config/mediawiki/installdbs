@@ -1,0 +1,22 @@
+#!/bin/sh
+
+# Hide the current LocalSettings.php if it exists
+if [ -f $MW_INSTALL_PATH/LocalSettings.php ]
+then
+    mv $MW_INSTALL_PATH/LocalSettings.php $MW_INSTALL_PATH/LocalSettings.php.docker.tmp
+fi
+
+# Install the base Mediawiki tables on the db server & remove the generated LocalSettings.php
+php $MW_INSTALL_PATH/maintenance/install.php --dbuser root --dbpass toor --dbname $1 --dbserver db-master --lang en --pass dockerpass docker-$1 admin
+rm $MW_INSTALL_PATH/LocalSettings.php
+
+# Move back the old LocalSettings if we had moved one!
+if [ -f $MW_INSTALL_PATH/LocalSettings.php.docker.tmp ]
+then
+    mv $MW_INSTALL_PATH/LocalSettings.php.docker.tmp $MW_INSTALL_PATH/LocalSettings.php
+fi
+
+# Run update.php too
+php $MW_INSTALL_PATH/maintenance/update.php --wiki $1 --quick
+
+echo "Finished installing dbs"

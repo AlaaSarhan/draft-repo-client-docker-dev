@@ -1,0 +1,65 @@
+#!/bin/sh
+set -eu
+
+cd $(dirname $0)
+
+# Create a combined .env file
+touch .env
+rm .env
+cat default.env >> .env
+# Ensure there is a trailing new line before appending the next chunk
+# Avoid `sed -i -e '$a\'` because of compat with BSD sed (macOS).
+# `sed -i '' -e '$a\'` could work there, but that doesn't work on GNU sed.
+# Just use echo instead. We always re-create the target, so appending
+# unconditionally won't cause indefinite growth.
+# https://github.com/addshore/mediawiki-docker-dev/issues/18
+echo >> .env
+touch local.env
+cat local.env >> .env
+echo >> .env
+
+# Switch -dev for php vs hhvm (as there is no -dev) for hhvm
+if grep -q PHPORHHVM=hhvm .env; then
+   echo "DOCKERPHPDEV=" >> .env
+else
+   echo "DOCKERPHPDEV=-dev" >> .env
+fi
+
+# Start Containers
+echo "Containers are starting"
+docker-compose up -d
+
+echo "Waiting for the db servers to finish starting"
+docker-compose exec "web" //srv/wait-for-it.sh db-master:3306
+docker-compose exec "web" //srv/wait-for-it.sh db-slave:3306
+
+# Reset local hosts file
+touch .hosts
+rm .hosts
+
+./hosts-add proxy.mw.localhost
+
+echo "Setting up log directory"
+docker-compose exec "web" mkdir -p //var/log/repo
+docker-compose exec "web" chown application:application //var/log/repo
+docker-compose exec "web" mkdir -p //var/log/client
+docker-compose exec "web" chown application:application //var/log/client
+
+echo "Setting up images directory"
+docker-compose exec "web" mkdir -p //var/www/images/docker
+docker-compose exec "web" chown application:application //var/www/images/docker
+
+# Add the default sites
+./addsite repo
+./addsite client
+
+echo "Syncing hosts inside container"
+docker cp ./hosts-sync "$(docker-compose ps -q web)":/
+docker cp ./.hosts "$(docker-compose ps -q web)":/
+docker-compose exec "web" //hosts-sync
+
+echo "Syncing hosts on host"
+sudo ./hosts-sync
+
+# Done
+echo "Your development environment is running"

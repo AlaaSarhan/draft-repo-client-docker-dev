@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+echo "Containers are starting"
+
+docker-compose start
